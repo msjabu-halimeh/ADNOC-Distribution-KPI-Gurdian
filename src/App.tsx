@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { ChangeEvent, useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import {
   Bar,
   BarChart,
@@ -174,6 +175,20 @@ const parseRows = (text: string): RawRow[] => {
   }
 
   return rows;
+};
+
+const getTextFromSheet = (sheet: XLSX.WorkSheet) => {
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false }) as unknown[][];
+  return rows
+    .map((row) => row.map((cell) => (cell == null ? '' : String(cell))).join(', '))
+    .join('\n');
+};
+
+const parseXlsxFile = async (file: File) => {
+  const data = await file.arrayBuffer();
+  const workbook = XLSX.read(data, { type: 'array' });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  return getTextFromSheet(sheet);
 };
 
 const buildSummary = (rows: RawRow[]) => {
@@ -622,6 +637,7 @@ const App = () => {
   const [rawText, setRawText] = useState(SAMPLE_PLACEHOLDER);
   const [regions, setRegions] = useState<RegionSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
 
   const recommendations = useMemo(() => buildRecommendations(regions), [regions]);
 
@@ -646,6 +662,31 @@ const App = () => {
     setRawText(SAMPLE_PLACEHOLDER);
     setRegions([]);
     setError(null);
+    setSelectedFileName(null);
+  };
+
+  const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    setError(null);
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setSelectedFileName(file.name);
+
+    try {
+      const text = file.name.match(/\.xls[x]?$/i) || file.type.includes('spreadsheet')
+        ? await parseXlsxFile(file)
+        : await file.text();
+      setRawText(text);
+      const rows = parseRows(text);
+      if (!rows.length) {
+        setError('No valid rows detected in uploaded file. Please check the format.');
+        setRegions([]);
+        return;
+      }
+      setRegions(buildSummary(rows));
+    } catch (uploadError) {
+      setError('Failed to parse uploaded file. Please upload XLS, XLSX, CSV, or TSV.');
+      setRegions([]);
+    }
   };
 
   const handleDownload = () => {
@@ -706,6 +747,20 @@ const App = () => {
             onChange={(event) => setRawText(event.target.value)}
             placeholder={SAMPLE_PLACEHOLDER}
           />
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <label className="group inline-flex cursor-pointer items-center gap-3 rounded-3xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm text-slate-200 transition hover:border-slate-500">
+              <input
+                type="file"
+                accept=".xls,.xlsx,.csv,.tsv"
+                className="hidden"
+                onChange={handleFileUpload}
+              />
+              <span>Upload XLS/XLSX/CSV</span>
+            </label>
+            {selectedFileName ? (
+              <div className="text-sm text-slate-400">Selected file: {selectedFileName}</div>
+            ) : null}
+          </div>
           {error ? <p className="mt-4 rounded-2xl bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</p> : null}
         </section>
 
