@@ -266,7 +266,21 @@ const computeGrowth = (current?: number, prior?: number) => {
   return ((current - prior) / prior) * 100;
 };
 
-const sumValues = (rows: RawRow[], field: keyof RawRow) => rows.reduce((sum, row) => sum + (row[field] ?? 0), 0);
+const numericFieldKeys = [
+  'revenueTY',
+  'revenueLY',
+  'inspectionsTY',
+  'inspectionsLY',
+  'totalInspectionsTY',
+  'totalInspectionsLY',
+  'carParkSizeTY',
+  'carParkSizeLY',
+] as const;
+
+type NumericRawField = (typeof numericFieldKeys)[number];
+
+const sumValues = (rows: RawRow[], field: NumericRawField) =>
+  rows.reduce((sum, row) => sum + ((row[field] as number) ?? 0), 0);
 
 const computeRegionMetrics = (region: RegionSummary) => {
   const standardRows = region.services['Standard Inspection'] ?? [];
